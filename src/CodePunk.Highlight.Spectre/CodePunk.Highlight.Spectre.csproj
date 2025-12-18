@@ -9,7 +9,7 @@
 
     <!-- NuGet Package Properties -->
     <PackageId>CodePunk.Highlight</PackageId>
-    <Version>2.0.1</Version>
+    <Version>2.0.2</Version>
     <Authors>CodePunk</Authors>
     <Company>CodePunk</Company>
     <Description>A powerful and extensible syntax highlighting library designed for beautiful terminal output with Spectre.Console. Features rich color support for 40+ programming languages. This package now depends on CodePunk.Highlight.Core for the core tokenization engine.</Description>

@@ -29,7 +29,10 @@ public class CSharpLanguageDefinition : ILanguageDefinition
         "unsafe", "using", "virtual", "volatile", "while",
         "async", "await", "nameof", "when", "partial", "yield",
         "get", "set", "add", "remove", "value", "global", "record", "init", "with",
-        "required", "scoped", "file", "var", "dynamic"
+        "required", "scoped", "file", "var", "dynamic",
+        "and", "or", "not",
+        "from", "where", "select", "group", "into", "orderby", "join", "let",
+        "on", "equals", "by", "ascending", "descending", "union", "closed",
     };
 
     private static readonly HashSet<string> BuiltInTypes = new(StringComparer.Ordinal)

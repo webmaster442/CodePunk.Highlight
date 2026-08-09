@@ -4,42 +4,65 @@ using CodePunk.Highlight.Core.SyntaxHighlighting.Tokenization;
 namespace CodePunk.Highlight.Core.SyntaxHighlighting.Languages;
 
 /// <summary>
-/// C language definition for syntax highlighting.
-/// Provides a tokenizer for C with support for keywords, types, preprocessor directives, and more.
+/// C++ language definition for syntax highlighting.
+/// Provides a tokenizer for C++23 with support for keywords, types, preprocessor
+/// directives, raw string literals, and more.
 /// </summary>
-public class CLanguageDefinition : ILanguageDefinition
+public class CPPLanguageDefinition : ILanguageDefinition
 {
-    public string Name => "c";
-    public string[] Aliases => new[] { "h" };
+    public string Name => "cpp";
+    public string[] Aliases => new[] { "c++", "cc", "cxx", "hpp", "hh", "hxx", "ipp" };
 
     private static readonly HashSet<string> Keywords = new(StringComparer.Ordinal)
     {
+        // Control flow
         "if", "else", "for", "while", "do", "switch", "case", "default", "break",
-        "continue", "return", "goto", "typedef", "struct", "union", "enum",
-        "static", "extern", "auto", "register", "const", "volatile", "restrict",
-        "inline", "sizeof", "typeof", "typeof_unqual", "_Alignas", "_Alignof",
-        "_Atomic", "_Bool", "_Complex", "_Generic", "_Imaginary", "_Noreturn",
-        "_Static_assert", "_Thread_local", "_Decimal32", "_Decimal64", "_Decimal128",
-        "alignas", "alignof", "constexpr", "nullptr", "static_assert", "thread_local"
+        "continue", "return", "goto",
+        // Declarations / storage
+        "typedef", "struct", "union", "enum", "class", "namespace", "template",
+        "typename", "using", "static", "extern", "auto", "register", "const",
+        "volatile", "mutable", "inline", "explicit", "friend", "virtual",
+        "override", "final", "public", "private", "protected", "constexpr",
+        "consteval", "constinit", "thread_local", "concept", "requires", "export",
+        // Operators / expressions
+        "new", "delete", "sizeof", "alignof", "alignas", "typeid", "decltype",
+        "noexcept", "static_assert", "static_cast", "dynamic_cast",
+        "reinterpret_cast", "const_cast", "operator", "this",
+        // Exceptions / coroutines
+        "try", "catch", "throw", "co_await", "co_return", "co_yield",
+        // Alternative tokens
+        "and", "and_eq", "bitand", "bitor", "compl", "not", "not_eq", "or",
+        "or_eq", "xor", "xor_eq",
+        // Misc
+        "asm"
     };
 
     private static readonly HashSet<string> Types = new(StringComparer.Ordinal)
     {
-        "void", "char", "short", "int", "long", "float", "double", "signed",
-        "unsigned", "size_t", "ssize_t", "ptrdiff_t", "intptr_t", "uintptr_t",
+        // Fundamental types
+        "void", "bool", "char", "char8_t", "char16_t", "char32_t", "wchar_t",
+        "short", "int", "long", "float", "double", "signed", "unsigned",
+        // Fixed-width / library integer types
+        "size_t", "ssize_t", "ptrdiff_t", "intptr_t", "uintptr_t",
         "int8_t", "int16_t", "int32_t", "int64_t", "uint8_t", "uint16_t",
         "uint32_t", "uint64_t", "int_least8_t", "int_least16_t", "int_least32_t",
         "int_least64_t", "uint_least8_t", "uint_least16_t", "uint_least32_t",
         "uint_least64_t", "int_fast8_t", "int_fast16_t", "int_fast32_t",
         "int_fast64_t", "uint_fast8_t", "uint_fast16_t", "uint_fast32_t",
-        "uint_fast64_t", "intmax_t", "uintmax_t", "wchar_t", "wint_t",
-        "char16_t", "char32_t", "time_t", "clock_t", "va_list", "bool",
-        "FILE", "NULL"
+        "uint_fast64_t", "intmax_t", "uintmax_t",
+        // Common standard library types
+        "string", "string_view", "wstring", "u8string", "u16string", "u32string",
+        "vector", "array", "map", "unordered_map", "set", "unordered_set",
+        "multimap", "multiset", "pair", "tuple", "optional", "variant", "any",
+        "span", "list", "forward_list", "deque", "stack", "queue",
+        "priority_queue", "shared_ptr", "unique_ptr", "weak_ptr", "function",
+        "initializer_list", "byte", "nullptr_t",
+        "FILE"
     };
 
     private static readonly HashSet<string> Literals = new(StringComparer.Ordinal)
     {
-        "true", "false", "NULL"
+        "true", "false", "nullptr", "NULL"
     };
 
     public bool Matches(string languageId)
@@ -124,11 +147,23 @@ public class CLanguageDefinition : ILanguageDefinition
                 continue;
             }
 
-            // String literals
-            if (ch == '"')
+            // Raw string literals: R"delim( ... )delim" (optionally prefixed with L, u8, u, U)
+            if (TryReadRawStringPrefix(source, pos, out var rawStart))
             {
                 var start = pos;
-                pos++;
+                pos = ReadRawString(source, rawStart);
+                tokens.Add(new Token(TokenType.String, source.Slice(start, pos - start).ToString()));
+                continue;
+            }
+
+            // String literals (with optional L, u8, u, U prefix)
+            if (ch == '"' || TryReadStringPrefix(source, pos, '"', out _))
+            {
+                var start = pos;
+                // Skip encoding prefix
+                while (pos < source.Length && source[pos] != '"')
+                    pos++;
+                pos++; // opening quote
                 while (pos < source.Length)
                 {
                     if (source[pos] == '\\' && pos + 1 < source.Length)
@@ -147,11 +182,13 @@ public class CLanguageDefinition : ILanguageDefinition
                 continue;
             }
 
-            // Character literals
-            if (ch == '\'')
+            // Character literals (with optional L, u8, u, U prefix)
+            if (ch == '\'' || TryReadStringPrefix(source, pos, '\'', out _))
             {
                 var start = pos;
-                pos++;
+                while (pos < source.Length && source[pos] != '\'')
+                    pos++;
+                pos++; // opening quote
                 while (pos < source.Length)
                 {
                     if (source[pos] == '\\' && pos + 1 < source.Length)
@@ -203,6 +240,14 @@ public class CLanguageDefinition : ILanguageDefinition
                     var current = source[pos];
 
                     if (char.IsDigit(current))
+                    {
+                        pos++;
+                        continue;
+                    }
+
+                    // Digit separators (C++14+)
+                    if (current == '\'' && pos + 1 < source.Length &&
+                        (char.IsLetterOrDigit(source[pos + 1]) || source[pos + 1] == '\''))
                     {
                         pos++;
                         continue;
@@ -295,6 +340,77 @@ public class CLanguageDefinition : ILanguageDefinition
         return tokens;
     }
 
+    private static bool TryReadStringPrefix(ReadOnlySpan<char> source, int pos, char quote, out int quotePos)
+    {
+        // Matches encoding prefixes L, u, U, u8 immediately followed by the quote.
+        quotePos = pos;
+        var i = pos;
+        if (i < source.Length && (source[i] == 'L' || source[i] == 'u' || source[i] == 'U'))
+        {
+            if (source[i] == 'u' && i + 1 < source.Length && source[i + 1] == '8')
+                i += 2;
+            else
+                i++;
+
+            if (i < source.Length && source[i] == quote)
+            {
+                quotePos = i;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool TryReadRawStringPrefix(ReadOnlySpan<char> source, int pos, out int rStart)
+    {
+        // Matches R"..., LR"..., u8R"..., uR"..., UR"...
+        rStart = pos;
+        var i = pos;
+        if (i < source.Length && (source[i] == 'L' || source[i] == 'u' || source[i] == 'U'))
+        {
+            if (source[i] == 'u' && i + 1 < source.Length && source[i + 1] == '8')
+                i += 2;
+            else
+                i++;
+        }
+
+        if (i + 1 < source.Length && source[i] == 'R' && source[i + 1] == '"')
+        {
+            rStart = i;
+            return true;
+        }
+        return false;
+    }
+
+    private static int ReadRawString(ReadOnlySpan<char> source, int rPos)
+    {
+        // rPos points at 'R'. Format: R"delimiter( ... )delimiter"
+        var pos = rPos + 2; // skip R and opening "
+        var delimStart = pos;
+        while (pos < source.Length && source[pos] != '(' && source[pos] != '"')
+            pos++;
+
+        var delimiter = source.Slice(delimStart, pos - delimStart).ToString();
+        var terminator = ")" + delimiter + "\"";
+
+        if (pos < source.Length && source[pos] == '(')
+            pos++; // skip opening (
+
+        while (pos < source.Length)
+        {
+            if (source[pos] == ')' &&
+                pos + terminator.Length <= source.Length &&
+                source.Slice(pos, terminator.Length).SequenceEqual(terminator.AsSpan()))
+            {
+                pos += terminator.Length;
+                break;
+            }
+            pos++;
+        }
+
+        return pos;
+    }
+
     private static bool IsIdentifierStart(char ch) =>
         char.IsLetter(ch) || ch == '_';
 
@@ -310,7 +426,7 @@ public class CLanguageDefinition : ILanguageDefinition
     private static bool IsOperatorPart(char ch) =>
         ch == '+' || ch == '-' || ch == '=' || ch == '&' || ch == '|' ||
         ch == '<' || ch == '>' || ch == '?' || ch == '!' || ch == '*' ||
-        ch == '/' || ch == '%' || ch == '.';
+        ch == '/' || ch == '%' || ch == '.' || ch == ':';
 
     private static bool IsPunctuation(char ch) =>
         ch == '{' || ch == '}' || ch == '(' || ch == ')' || ch == '[' || ch == ']' ||
